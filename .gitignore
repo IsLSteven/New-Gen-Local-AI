@@ -1,0 +1,45 @@
+# ============================================================================
+# New-Gen-Local-AI (.gitignore)
+# ============================================================================
+
+# Virtual environments & Python caches
+.venv/
+venv/
+ENV/
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Local AI Models, Vaults, Caches & Engine Binaries (NEVER commit weights!)
+models/
+vault_hdd/
+hot_ssd/
+engine_bin/
+.cache/
+.nglai/
+*.gguf
+*.safetensors
+*.bin
+*.pt
+*.pth
+*.onnx
+
+# Logs, temporary files & local configs
+logs/
+*.log
+.env
+.env.local
+nglai.local.json
+
+# OS & IDE files
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/extensions.json
+.idea/

@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>New-Gen-Local-AI — Compound Coding Workspace</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-icon">⚡</span>
+      <div>
+        <h1>New-Gen-Local-AI</h1>
+        <span class="subtitle">30B–35B MoE • Unsloth Dynamic 2.0 • TurboQuant KV • Compound AI</span>
+      </div>
+    </div>
+
+    <div class="telemetry-strip">
+      <div class="metric-pill" id="gpuMetric" title="Alocação estimada e total da GPU">
+        <span class="label">GPU VRAM</span>
+        <strong id="gpuVal">--</strong>
+      </div>
+      <div class="metric-pill" id="ramMetric" title="Memória RAM do sistema">
+        <span class="label">RAM</span>
+        <strong id="ramVal">--</strong>
+      </div>
+      <div class="metric-pill" title="Compressão KV Cache ativa">
+        <span class="label">KV Cache</span>
+        <strong id="kvVal" class="accent">turbo3</strong>
+      </div>
+      <div class="metric-pill" title="Velocidade estimada no hardware atual">
+        <span class="label">Throughput</span>
+        <strong id="speedVal">--</strong>
+      </div>
+    </div>
+
+    <div class="engine-controls">
+      <select id="modelSelect" title="Selecionar modelo comprimido"></select>
+      <span id="engineBadge" class="status-badge offline">Standby</span>
+      <button id="engineToggleBtn" class="btn primary">Iniciar Motor</button>
+    </div>
+  </header>
+
+  <main class="workspace-grid">
+    <!-- Left Sidebar: Explorer / Repo-Map / Vault & Split -->
+    <aside class="panel sidebar">
+      <div class="tab-bar">
+        <button class="tab active" data-tab="files">📂 Arquivos</button>
+        <button class="tab" data-tab="repomap">🗺️ Repo-Map</button>
+        <button class="tab" data-tab="vault">💾 Split & Vault</button>
+      </div>
+
+      <div class="tab-content active" id="tab-files">
+        <div class="panel-subheader">
+          <span id="workspaceRootLabel">Workspace</span>
+          <button id="refreshTreeBtn" class="icon-btn" title="Atualizar árvore">↻</button>
+        </div>
+        <ul id="fileTree" class="file-tree"></ul>
+      </div>
+
+      <div class="tab-content" id="tab-repomap">
+        <div class="panel-subheader">
+          <span>Mapa Sintático AST</span>
+          <button id="refreshMapBtn" class="icon-btn" title="Recalcular AST Repo-Map">↻</button>
+        </div>
+        <pre id="repoMapView" class="mono-box">Carregando AST Repo-Map...</pre>
+      </div>
+
+      <div class="tab-content" id="tab-vault">
+        <div class="vault-section">
+          <h3>🔪 Tensor Split Cirúrgico</h3>
+          <div id="splitNotes" class="notes-list"></div>
+          <label class="field-label">Regex Tensor Override (<code>-ot</code>)</label>
+          <code id="otRegexBox" class="code-chip">--</code>
+        </div>
+
+        <div class="vault-section">
+          <h3>🔥 SSD (Hot) ↔ ❄️ HDD (Cold)</h3>
+          <label class="field-label">Pasta Rápida no SSD (256 GB)</label>
+          <input id="hotSsdInput" type="text" class="text-input" />
+          <label class="field-label">Cofre Massivo no HDD (1 TB)</label>
+          <input id="coldHddInput" type="text" class="text-input" />
+          <div class="btn-row">
+            <button id="saveVaultBtn" class="btn small">Salvar Pastas</button>
+            <button id="evictSsdBtn" class="btn small secondary">Limpar Inativos do SSD</button>
+          </div>
+          <p id="vaultFeedback" class="hint-text"></p>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Center Panel: Code & Unified Diff Inspector -->
+    <section class="panel editor-panel">
+      <div class="editor-header">
+        <span id="currentFileTitle">📄 Selecione um arquivo ou acompanhe os Diffs do Agente ao vivo</span>
+        <span id="viewModeBadge" class="tag">Código</span>
+      </div>
+      <div id="codeViewer" class="code-viewer">
+        <div class="empty-state">
+          <h2>Workspace Pronto</h2>
+          <p>Clique em qualquer arquivo à esquerda para inspecionar o código-fonte, ou envie uma tarefa ao Agente Compound AI à direita para ver os <strong>Diffs Cirúrgicos</strong> e validações sintáticas em tempo real.</p>
+          <div class="gateway-box">
+            <strong>🔌 Gateway OpenAI-Compatible ativo p/ VS Code (Roo Code / Cline):</strong>
+            <code id="gatewayUrlLabel">http://127.0.0.1:7860/v1</code>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Right Panel: Compound AI Autonomous Chat -->
+    <section class="panel chat-panel">
+      <div class="chat-header">
+        <div>
+          <strong>🤖 Agente Autônomo Compound AI</strong>
+          <span class="chat-sub">Plan → Deep Thinking → Surgical Edit → Auto-Verify</span>
+        </div>
+        <div class="chat-actions">
+          <label class="toggle-label" title="Ativar raciocínio profundo <think> antes de agir">
+            <input type="checkbox" id="thinkingToggle" checked />
+            <span>🧠 Thinking</span>
+          </label>
+          <button id="resetChatBtn" class="btn small secondary" title="Limpar histórico da conversa">Nova Sessão</button>
+        </div>
+      </div>
+
+      <div id="chatMessages" class="chat-messages">
+        <div class="msg assistant">
+          <div class="msg-header">⚡ New-Gen-Local-AI</div>
+          <div class="msg-body">
+            Olá! Estou conectado ao workspace local com indexação <strong>AST Repo-Map</strong>, ferramentas cirúrgicas (<code>read_file</code>, <code>edit_file</code>, <code>write_file</code>, <code>run_command</code>, <code>grep_search</code>) e auto-verificação sintática.<br><br>
+            Qual funcionalidade, refatoração ou arquitetura vamos construir agora?
+          </div>
+        </div>
+      </div>
+
+      <div class="composer">
+        <textarea
+          id="promptInput"
+          rows="3"
+          placeholder="Descreva a tarefa de engenharia (Enter envia, Shift+Enter quebra linha)..."
+        ></textarea>
+        <button id="sendBtn" class="btn primary send-btn">Enviar ❯</button>
+      </div>
+    </section>
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
