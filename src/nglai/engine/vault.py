@@ -162,13 +162,16 @@ class ModelVault:
                 part_file.replace(final_cold)
             elif supports_range and total_bytes > (existing_bytes + 8 * 1024 * 1024) and parallel_workers > 1:
                 # Pre-extend sparse random-access file preserving existing_bytes [0 .. existing_bytes-1]
-                mode = "r+b" if part_file.exists() else "w+b"
-                with open(part_file, mode) as pre_fh:
-                    if os.name == "nt" and existing_bytes == 0:
+                if not part_file.exists():
+                    part_file.touch()
+                    if os.name == "nt":
                         import subprocess as _sp
 
                         _sp.run(["fsutil", "sparse", "setflag", str(part_file)], capture_output=True, check=False)
+                with open(part_file, "r+b") as pre_fh:
                     pre_fh.truncate(total_bytes)
+                if progress_cb:
+                    progress_cb(existing_bytes, total_bytes)
 
                 remaining = total_bytes - existing_bytes
                 chunk_span = max(4 * 1024 * 1024, (remaining + parallel_workers - 1) // parallel_workers)
