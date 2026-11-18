@@ -358,5 +358,14 @@
   loadTelemetry();
   loadFileTree();
   connectWebSocket();
+  pollDownloadStatus().then(() => {
+    fetch("/api/vault/pull-status")
+      .then((r) => r.json())
+      .then((st) => {
+        if (st.active && !dlPollTimer) {
+          dlPollTimer = setInterval(pollDownloadStatus, 1200);
+        }
+      });
+  });
   setInterval(loadTelemetry, 8000);
 })();
