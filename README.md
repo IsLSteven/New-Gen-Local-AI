@@ -130,9 +130,29 @@ Se preferir controlar cada etapa via linha de comando ou usar o agente direto no
 
 ---
 
-## 🔌 Como Usar Dentro do VS Code (Roo Code, Cline, Continue) ou OpenCode
+## 🔌 Como Usar Dentro do Google Antigravity, VS Code (Roo Code / Cline / Continue) ou OpenCode
 
-Com o `start.bat` ou `nglai web` rodando, você ganha automaticamente uma **API Local compatível com OpenAI** enriquecida com nosso **AST Repo-Map**:
+### A) Integração Nativa com Google Antigravity via MCP (`mcp_config.json`)
+O **New-Gen-Local-AI** já inclui um servidor **MCP (Model Context Protocol)** nativo (`nglai mcp`)! Com ele, o próprio agente do **Google Antigravity** ganha as ferramentas `ask_local_ai`, `run_local_coding_agent` e `get_local_ai_status` para delegar tarefas de código privadas/offline direto para a sua GPU local:
+
+1. No Antigravity, abra **`...` (Additional Options) > MCP Servers** ou edite o arquivo `~/.gemini/config/mcp_config.json` (`C:\Users\<SeuUsuario>\.gemini\config\mcp_config.json` no Windows):
+```json
+{
+  "mcpServers": {
+    "new-gen-local-ai": {
+      "command": "D:\\IaLocal\\.venv\\Scripts\\python.exe",
+      "args": ["-m", "nglai.cli", "mcp"],
+      "env": {
+        "NGLAI_HOME": "D:\\IaLocal"
+      }
+    }
+  }
+}
+```
+2. Salve/recarregue os servidores MCP e chame no chat do Antigravity com `@new-gen-local-ai`!
+
+### B) Barra Lateral 100% Local no Antigravity IDE ou VS Code (Roo Code, Cline, Continue)
+Como o **Antigravity IDE** é baseado em VS Code, você também pode abrir a aba **Extensions (`Ctrl + Shift + X`)**, instalar **Roo Code** ou **Cline** e apontar para a nossa API Local compatível com OpenAI (ativa com `start.bat` / `nglai web`):
 
 - **API Provider:** `OpenAI Compatible`
 - **Base URL:** `http://127.0.0.1:7860/v1`

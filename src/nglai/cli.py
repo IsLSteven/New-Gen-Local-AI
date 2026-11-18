@@ -235,6 +235,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     sub.add_parser("chat", parents=[common], help="Inicia o agente interativo no terminal (padrão)")
     sub.add_parser("hardware", parents=[common], help="Mostra diagnóstico de GPU/VRAM/RAM e cálculo de Tensor Split")
     sub.add_parser("ide", parents=[common], help="Exibe configuração OpenAI-compatible para VS Code (Roo Code / Cline)")
+    sub.add_parser("mcp", parents=[common], help="Inicia o servidor MCP Stdio nativo para Google Antigravity")
 
     web_p = sub.add_parser("web", parents=[common], help="Inicia o Painel Web estilo Antigravity + Gateway /v1")
     web_p.add_argument("--host", default=None)
@@ -267,6 +268,10 @@ def main(argv: Optional[list[str]] = None) -> int:
     if cmd == "ide":
         print_ide_integration(cfg)
         return 0
+    if cmd == "mcp":
+        from .mcp_server import run_stdio_mcp_server
+
+        return run_stdio_mcp_server()
     if cmd == "up":
         host = args.host or cfg.web_host
         port = args.port or cfg.web_port
