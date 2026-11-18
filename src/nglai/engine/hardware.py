@@ -126,7 +126,9 @@ class SplitPlan:
 
         args.extend(["--cache-type-k", k_type, "--cache-type-v", v_type])
 
-        if self.override_tensor_regex:
+        if self.cpu_moe_layers > 0:
+            args.extend(["--n-cpu-moe", str(self.cpu_moe_layers)])
+        elif self.override_tensor_regex:
             args.extend(["-ot", self.override_tensor_regex])
 
         return args
