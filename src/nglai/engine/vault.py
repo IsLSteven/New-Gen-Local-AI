@@ -161,15 +161,13 @@ class ModelVault:
             if total_bytes > 0 and existing_bytes >= total_bytes and existing_bytes > 0:
                 part_file.replace(final_cold)
             elif supports_range and total_bytes > (existing_bytes + 8 * 1024 * 1024) and parallel_workers > 1:
-                # Pre-extend sparse random-access file preserving existing_bytes [0 .. existing_bytes-1]
+                # Create sparse random-access file without MSVCRT _chsize_s zero-fill loop!
                 if not part_file.exists():
                     part_file.touch()
                     if os.name == "nt":
                         import subprocess as _sp
 
                         _sp.run(["fsutil", "sparse", "setflag", str(part_file)], capture_output=True, check=False)
-                with open(part_file, "r+b") as pre_fh:
-                    pre_fh.truncate(total_bytes)
                 if progress_cb:
                     progress_cb(existing_bytes, total_bytes)
 
