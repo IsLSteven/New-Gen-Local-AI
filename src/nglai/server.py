@@ -10,6 +10,7 @@ from typing import Any, Dict, List, Optional
 
 import httpx
 from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -61,6 +62,13 @@ def create_app(
         title="New-Gen-Local-AI Workspace & Gateway",
         version="0.1.0",
         description="Triple-Stack Compressed Local Coding Agent + OpenAI-Compatible /v1 Gateway",
+    )
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
     )
     app.state.config = cfg
     app.state.workspace_root = ws_root
@@ -345,6 +353,8 @@ def create_app(
     @app.post("/v1/chat/completions")
     async def openai_chat_completions_proxy(request: Request) -> Any:
         body = await request.json()
+        if not runtime.is_healthy():
+            await asyncio.to_thread(runtime.start, cfg.active_model_id, 90)
         if request.headers.get("X-NGLAI-RepoMap", "").lower() in ("1", "true", "yes"):
             msgs = body.get("messages") or []
             last_user = next((m.get("content", "") for m in reversed(msgs) if m.get("role") == "user"), "")
