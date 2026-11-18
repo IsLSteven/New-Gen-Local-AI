@@ -77,14 +77,16 @@ class NGLAIConfig:
             self.engine_bin_dir,
             str(Path(self.cache_dir) / "hf"),
             str(Path(self.cache_dir) / "pip"),
+            str(Path(self.cache_dir) / "cuda_jit"),
             str(Path(self.cache_dir) / "tmp"),
         ):
             Path(folder).mkdir(parents=True, exist_ok=True)
 
-        # Isolate HuggingFace, Pip, and temporary caches away from OS C: drive
+        # Isolate HuggingFace, Pip, CUDA JIT, and temporary caches away from OS C: drive
         os.environ.setdefault("HF_HOME", str(Path(self.cache_dir) / "hf"))
         os.environ.setdefault("HUGGINGFACE_HUB_CACHE", str(Path(self.cache_dir) / "hf" / "hub"))
         os.environ.setdefault("PIP_CACHE_DIR", str(Path(self.cache_dir) / "pip"))
+        os.environ.setdefault("CUDA_CACHE_PATH", str(Path(self.cache_dir) / "cuda_jit"))
 
     def save(self, path: Optional[Path] = None) -> Path:
         target = path or self.config_file

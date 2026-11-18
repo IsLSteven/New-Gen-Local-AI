@@ -183,6 +183,27 @@ MODEL_CATALOG: Dict[str, ModelSpec] = {
             "Modo Rápido (~5.0 GB) com Deep Thinking e Tool Calling: cabe 100% em GPUs de 8GB VRAM a 45+ tok/s."
         ),
     ),
+    "qwen3-4b-ud-q4kxl": ModelSpec(
+        id="qwen3-4b-ud-q4kxl",
+        name="Qwen3-4B (Unsloth Dynamic UD-Q4_K_XL)",
+        family="qwen3",
+        hf_repo="unsloth/Qwen3-4B-GGUF",
+        filename="Qwen3-4B-UD-Q4_K_XL.gguf",
+        size_gb=2.37,
+        total_params_b=4.0,
+        active_params_b=4.0,
+        is_moe=False,
+        num_layers=36,
+        quant_method="Unsloth Dynamic 2.0 (UD-Q4_K_XL)",
+        bits_per_weight=4.90,
+        max_native_ctx=131072,
+        supports_thinking=True,
+        supports_tools=True,
+        tier="dense-specialist",
+        description_pt=(
+            " Campeão p/ GPUs de 4GB VRAM (ex: GTX 1650): 2.37 GB, 100% GPU, com Deep Thinking (<think>) e Tool Calling Qwen3."
+        ),
+    ),
     "qwen2.5-coder-1.5b-draft": ModelSpec(
         id="qwen2.5-coder-1.5b-draft",
         name="Qwen2.5-Coder-1.5B-Instruct (Draft / Quick Test)",

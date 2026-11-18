@@ -133,7 +133,7 @@ def install_llama_engine(
     if resolved_backend == "auto":
         if sys_name == "darwin":
             resolved_backend = "metal"
-        elif hw.has_cuda:
+        elif hw.has_cuda and hw.has_tensor_cores:
             resolved_backend = "cuda"
         else:
             resolved_backend = "vulkan" if sys_name in ("windows", "linux") else "cpu"

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import functools
 import os
 import platform
 import re
@@ -32,6 +33,12 @@ class GPUInfo:
     def vram_free_gb(self) -> float:
         return round(self.vram_free_mb / 1024.0, 2)
 
+    @property
+    def has_tensor_cores(self) -> bool:
+        """True for NVIDIA RTX / Ampere+ / Hopper / Ada GPUs; False for legacy GTX 10xx/16xx."""
+        low = self.name.lower()
+        return any(tok in low for tok in ("rtx", "a100", "h100", "b100", "b200", "l4", "l40", "a10", "a30", "a40", "a6000"))
+
 
 @dataclass
 class DiskTierInfo:
@@ -59,6 +66,10 @@ class HardwareProfile:
     @property
     def has_cuda(self) -> bool:
         return len(self.gpus) > 0
+
+    @property
+    def has_tensor_cores(self) -> bool:
+        return any(g.has_tensor_cores for g in self.gpus)
 
     @property
     def total_vram_gb(self) -> float:
@@ -157,6 +168,7 @@ def _probe_nvidia_gpus() -> List[GPUInfo]:
         return []
 
 
+@functools.lru_cache(maxsize=1)
 def _probe_cpu_name() -> str:
     if platform.system().lower() == "windows":
         cpu_env = os.environ.get("PROCESSOR_IDENTIFIER")
@@ -271,7 +283,12 @@ def calculate_surgical_split(
     # Optimal CPU thread count: physical cores + half SMT headroom (sweet spot for DDR4 bandwidth)
     optimal_threads = max(2, min(hw.cpu_logical_threads - 1, hw.cpu_physical_cores + 2))
 
-    chosen_kv = "turbo3" if kv_mode == "auto" else kv_mode
+    # Non-Tensor-Core GPUs (e.g. GTX 1650 sm_75) must avoid quantized V-cache + FlashAttention MMA kernels
+    use_fa = hw.has_cuda and hw.has_tensor_cores
+    if kv_mode == "auto":
+        chosen_kv = "turbo3" if use_fa else "f16"
+    else:
+        chosen_kv = kv_mode
     is_linear_hybrid = model.family == "qwen3.6"
     ctx = min(requested_ctx, model.max_native_ctx)
 
@@ -282,11 +299,12 @@ def calculate_surgical_split(
     usable_ram = max(1.0, hw.ram_total_gb - ram_os_reserve)
 
     kv_gb = round(_kv_gb_per_1k_ctx(chosen_kv, is_linear_hybrid) * (ctx / 1024.0), 2)
-    # Shrink context automatically on ultra-tight VRAM so attention never OOMs
-    if hw.has_cuda and usable_vram < 3.4 and ctx > 16384:
-        ctx = 16384
+    # Shrink context automatically on ultra-tight 4GB VRAM so attention never OOMs
+    max_tight_ctx = 8192 if chosen_kv == "f16" else 16384
+    if hw.has_cuda and usable_vram < 3.4 and ctx > max_tight_ctx:
+        ctx = max_tight_ctx
         kv_gb = round(_kv_gb_per_1k_ctx(chosen_kv, is_linear_hybrid) * (ctx / 1024.0), 2)
-        notes.append("Contexto ajustado para 16K para caber com segurança nos 4 GB de VRAM.")
+        notes.append(f"Contexto ajustado para {ctx // 1024}K para caber com segurança nos 4 GB de VRAM.")
 
     # Case 1: Model + compressed KV cache fits 100% inside GPU VRAM!
     if hw.has_cuda and (model.size_gb + kv_gb) <= usable_vram:
@@ -303,7 +321,7 @@ def calculate_surgical_split(
             recommended_ctx=ctx,
             kv_cache_type_k=chosen_kv,
             kv_cache_type_v=chosen_kv,
-            flash_attention=True,
+            flash_attention=use_fa,
             cpu_threads=optimal_threads,
             estimated_vram_gb=round(model.size_gb + kv_gb, 2),
             estimated_ram_gb=0.6,
@@ -351,7 +369,7 @@ def calculate_surgical_split(
                 recommended_ctx=ctx,
                 kv_cache_type_k=chosen_kv,
                 kv_cache_type_v=chosen_kv,
-                flash_attention=True,
+                flash_attention=use_fa,
                 cpu_threads=optimal_threads,
                 estimated_vram_gb=est_vram,
                 estimated_ram_gb=est_ram,
@@ -382,7 +400,7 @@ def calculate_surgical_split(
             recommended_ctx=ctx,
             kv_cache_type_k=chosen_kv,
             kv_cache_type_v=chosen_kv,
-            flash_attention=True,
+            flash_attention=use_fa,
             cpu_threads=optimal_threads,
             estimated_vram_gb=est_vram,
             estimated_ram_gb=est_ram,

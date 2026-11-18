@@ -293,8 +293,8 @@ def main(argv: Optional[list[str]] = None) -> int:
             console.print("\n[green]✓ Modelo baixado![/green]")
 
         if runtime.vault.resolve_active_path(cfg.active_model_id, promote_to_hot=True) is not None:
-            console.print(f"[cyan]🚀 Subindo motor local com '{cfg.active_model_id}'...[/cyan]")
-            st = runtime.start(cfg.active_model_id, wait_seconds=90)
+            console.print(f"[cyan]🚀 Subindo motor local com '{cfg.active_model_id}' (na 1ª execução o CUDA compila os kernels da GPU)...[/cyan]")
+            st = runtime.start(cfg.active_model_id, wait_seconds=180)
             console.print(f"[green]✓ {st.message} ({st.endpoint})[/green]")
         else:
             console.print(

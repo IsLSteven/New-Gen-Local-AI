@@ -4,9 +4,11 @@ set "ROOT_DIR=%~dp0"
 if "%ROOT_DIR:~-1%"=="\" set "ROOT_DIR=%ROOT_DIR:~0,-1%"
 
 REM Zero-C-Drive Isolation: keep all caches & temp inside project directory
+set "PYTHONUTF8=1"
 set "NGLAI_HOME=%ROOT_DIR%"
 set "HF_HOME=%ROOT_DIR%\.cache\hf"
 set "PIP_CACHE_DIR=%ROOT_DIR%\.cache\pip"
+set "CUDA_CACHE_PATH=%ROOT_DIR%\.cache\cuda_jit"
 set "TMP=%ROOT_DIR%\.cache\tmp"
 set "TEMP=%ROOT_DIR%\.cache\tmp"
 

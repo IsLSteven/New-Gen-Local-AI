@@ -30,7 +30,8 @@ O sistema detecta sua GPU/VRAM e RAM automaticamente, mas você pode escolher qu
 
 | Seu Hardware | Modelo Recomendado (`ID`) | Tamanho | Como Roda |
 | :--- | :--- | :---: | :--- |
-| **Qualquer PC / Teste Rápido** *(4GB+ VRAM ou só CPU)* | `qwen2.5-coder-1.5b-draft` | **1.12 GB** | ⚡ Instantâneo! Ideal para testar toda a ferramenta em 1 minuto. |
+| **Qualquer PC / Teste Rápido** *(4GB+ VRAM ou só CPU)* | `qwen2.5-coder-1.5b-draft` | **1.12 GB** | ⚡ Instantâneo (~60+ tok/s)! Ideal para testar toda a ferramenta em 1 minuto. |
+| **GPU 4GB VRAM** *(ex: GTX 1650 / GTX 1050 Ti)* | `qwen3-4b-ud-q4kxl` | **2.37 GB** | 🔥 100% GPU com Unsloth Dynamic 2.0, *Deep Thinking* (`<think>`) e *Tool Calling*. |
 | **GPU 6GB–8GB VRAM** *(foco em velocidade máxima)* | `qwen3-8b-q4km` | **5.03 GB** | 🚀 100% na GPU (~40–55 tok/s) com modo *Thinking* e *Tool Calling*. |
 | **GPU 8GB VRAM** *(foco em código denso 14B)* | `qwen2.5-coder-14b-ud-iq3m` | **7.34 GB** | 🔥 Especialista 14B comprimido para caber em 8GB VRAM. |
 | **GPU 8GB VRAM + 16GB RAM** *(ex: RTX 3050/3060/4060)* | **`qwen3.6-35b-a3b-ud-iq3`** *(ou `qwen3-coder-30b-a3b-ud-iq3`)* | **12.30 GB** *(11.97 GB)* | 🏆 **Cérebro 30B–35B MoE!** Divide ~6.5 GB na GPU + ~6.6 GB na RAM (ativa só 3B/token). |
