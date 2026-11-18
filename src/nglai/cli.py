@@ -222,22 +222,25 @@ def interactive_chat(cfg: NGLAIConfig, workspace: Path) -> None:
 
 
 def main(argv: Optional[list[str]] = None) -> int:
+    common = argparse.ArgumentParser(add_help=False)
+    common.add_argument("--workspace", "-w", default=None, help="Diretório do projeto alvo")
+
     parser = argparse.ArgumentParser(
         prog="nglai",
+        parents=[common],
         description="New-Gen-Local-AI: Agente Autônomo 30B-35B MoE + Compressão Triple-Stack",
     )
-    parser.add_argument("--workspace", "-w", default=".", help="Diretório do projeto alvo")
     sub = parser.add_subparsers(dest="subcommand")
 
-    sub.add_parser("chat", help="Inicia o agente interativo no terminal (padrão)")
-    sub.add_parser("hardware", help="Mostra diagnóstico de GPU/VRAM/RAM e cálculo de Tensor Split")
-    sub.add_parser("ide", help="Exibe configuração OpenAI-compatible para VS Code (Roo Code / Cline)")
+    sub.add_parser("chat", parents=[common], help="Inicia o agente interativo no terminal (padrão)")
+    sub.add_parser("hardware", parents=[common], help="Mostra diagnóstico de GPU/VRAM/RAM e cálculo de Tensor Split")
+    sub.add_parser("ide", parents=[common], help="Exibe configuração OpenAI-compatible para VS Code (Roo Code / Cline)")
 
-    web_p = sub.add_parser("web", help="Inicia o Painel Web estilo Antigravity + Gateway /v1")
+    web_p = sub.add_parser("web", parents=[common], help="Inicia o Painel Web estilo Antigravity + Gateway /v1")
     web_p.add_argument("--host", default=None)
     web_p.add_argument("--port", type=int, default=None)
 
-    up_p = sub.add_parser("up", help="Tudo-em-um: instala motor se faltar, sobe modelo se baixado e abre o Painel Web")
+    up_p = sub.add_parser("up", parents=[common], help="Tudo-em-um: instala motor se faltar, sobe modelo se baixado e abre o Painel Web")
     up_p.add_argument("--host", default=None)
     up_p.add_argument("--port", type=int, default=None)
     up_p.add_argument("--pull", action="store_true", help="Baixa automaticamente o modelo ativo se ainda não existir")
@@ -254,7 +257,7 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     args = parser.parse_args(argv)
     cfg = NGLAIConfig.load()
-    workspace = Path(args.workspace).resolve()
+    workspace = Path(args.workspace or ".").resolve()
     runtime = EngineRuntime(cfg)
 
     cmd = args.subcommand or "chat"
