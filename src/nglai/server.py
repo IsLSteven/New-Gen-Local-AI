@@ -1,9 +1,10 @@
-"""FastAPI Backend: Antigravity-Style Web Workspace + Live Telemetry + OpenAI /v1 Gateway."""
+"""FastAPI Backend: Antigravity-Style Web Workspace + Live Model Downloader + OpenAI /v1 Gateway."""
 
 from __future__ import annotations
 
 import asyncio
 import os
+import threading
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -18,6 +19,7 @@ from .agent.repomap import IGNORED_DIRS, RepoMapper
 from .config import NGLAIConfig
 from .engine.catalog import MODEL_CATALOG, get_model_spec
 from .engine.hardware import calculate_surgical_split, detect_hardware
+from .engine.installer import install_llama_engine
 from .engine.runtime import EngineRuntime
 
 
@@ -25,6 +27,10 @@ class ModelSelectRequest(BaseModel):
     model_id: str
     context_size: Optional[int] = None
     enable_thinking: Optional[bool] = None
+
+
+class ModelPullRequest(BaseModel):
+    model_id: Optional[str] = None
 
 
 class StoragePathsRequest(BaseModel):
@@ -35,10 +41,21 @@ class StoragePathsRequest(BaseModel):
 def create_app(
     config: Optional[NGLAIConfig] = None,
     workspace_root: Optional[Path] = None,
+    runtime_instance: Optional[EngineRuntime] = None,
 ) -> FastAPI:
     cfg = config or NGLAIConfig.load()
     ws_root = (workspace_root or Path.cwd()).resolve()
-    runtime = EngineRuntime(cfg)
+    runtime = runtime_instance or EngineRuntime(cfg)
+
+    download_state: Dict[str, Any] = {
+        "active": False,
+        "model_id": None,
+        "downloaded_bytes": 0,
+        "total_bytes": 0,
+        "error": None,
+        "done_path": None,
+    }
+    dl_lock = threading.Lock()
 
     app = FastAPI(
         title="New-Gen-Local-AI Workspace & Gateway",
@@ -66,6 +83,7 @@ def create_app(
         spec = get_model_spec(cfg.active_model_id) or next(iter(MODEL_CATALOG.values()))
         plan = calculate_surgical_split(hw, spec, requested_ctx=cfg.context_size, kv_mode=cfg.kv_cache_mode)
         eng_status = runtime.status()
+        has_binary = runtime.find_llama_server_binary() is not None
         return {
             "workspace": str(ws_root),
             "hardware": hw.to_dict(),
@@ -92,12 +110,14 @@ def create_app(
             },
             "engine": {
                 "running": eng_status.running,
+                "binary_installed": has_binary,
                 "endpoint": eng_status.endpoint,
                 "pid": eng_status.pid,
                 "turboquant_enabled": eng_status.turboquant_enabled,
                 "kv_cache_type": eng_status.kv_cache_type,
                 "message": eng_status.message,
             },
+            "download": dict(download_state),
             "config": {
                 "hot_ssd_dir": cfg.hot_ssd_dir,
                 "cold_hdd_dir": cfg.cold_hdd_dir,
@@ -143,6 +163,45 @@ def create_app(
         cfg.save()
         return {"ok": True, "active_model_id": cfg.active_model_id, "context_size": cfg.context_size}
 
+    @app.post("/api/vault/pull")
+    async def pull_model_background(req: ModelPullRequest) -> Dict[str, Any]:
+        target_id = req.model_id or cfg.active_model_id
+        if target_id not in MODEL_CATALOG:
+            raise HTTPException(status_code=404, detail=f"Modelo '{target_id}' inválido.")
+        with dl_lock:
+            if download_state["active"]:
+                return {"ok": True, "already_running": True, "state": dict(download_state)}
+            download_state.update(
+                {
+                    "active": True,
+                    "model_id": target_id,
+                    "downloaded_bytes": 0,
+                    "total_bytes": 0,
+                    "error": None,
+                    "done_path": None,
+                }
+            )
+
+        def _bg_download() -> None:
+            def _prog(done: int, total: int) -> None:
+                download_state["downloaded_bytes"] = done
+                download_state["total_bytes"] = total
+
+            try:
+                path = runtime.vault.download_model(target_id, progress_cb=_prog, activate_hot=True)
+                download_state["done_path"] = str(path)
+            except Exception as exc:
+                download_state["error"] = str(exc)
+            finally:
+                download_state["active"] = False
+
+        threading.Thread(target=_bg_download, daemon=True).start()
+        return {"ok": True, "model_id": target_id}
+
+    @app.get("/api/vault/pull-status")
+    async def get_pull_status() -> Dict[str, Any]:
+        return dict(download_state)
+
     @app.post("/api/vault/paths")
     async def update_vault_paths(req: StoragePathsRequest) -> Dict[str, Any]:
         cfg.hot_ssd_dir = str(Path(req.hot_ssd_dir).resolve())
@@ -157,10 +216,20 @@ def create_app(
         evicted = runtime.vault.evict_inactive_from_hot(keep_model_id=cfg.active_model_id)
         return {"ok": True, "evicted_files": evicted}
 
+    @app.post("/api/engine/install")
+    async def install_engine_api() -> Dict[str, Any]:
+        try:
+            exe = await asyncio.to_thread(install_llama_engine, cfg, "auto", None)
+            return {"ok": True, "binary": str(exe)}
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
     @app.post("/api/engine/start")
     async def start_engine_api() -> Dict[str, Any]:
         try:
-            st = await asyncio.to_thread(runtime.start, cfg.active_model_id, 60)
+            if runtime.find_llama_server_binary() is None:
+                await asyncio.to_thread(install_llama_engine, cfg, "auto", None)
+            st = await asyncio.to_thread(runtime.start, cfg.active_model_id, 120)
             return {"ok": st.running, "status": st.__dict__}
         except Exception as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -205,9 +274,6 @@ def create_app(
         text = await asyncio.to_thread(mapper.build_map_text, query, cfg.repomap_max_tokens)
         return {"repomap": text}
 
-    # =========================================================================
-    # WebSocket Autonomous Agent Stream (Antigravity-Style Experience)
-    # =========================================================================
     @app.websocket("/ws/agent")
     async def websocket_agent(ws: WebSocket) -> None:
         await ws.accept()
@@ -262,9 +328,6 @@ def create_app(
         except WebSocketDisconnect:
             return
 
-    # =========================================================================
-    # OpenAI-Compatible /v1 Gateway (VS Code Cline / Roo Code / Continue / OpenCode)
-    # =========================================================================
     @app.get("/v1/models")
     async def openai_list_models() -> Dict[str, Any]:
         return {
@@ -282,7 +345,6 @@ def create_app(
     @app.post("/v1/chat/completions")
     async def openai_chat_completions_proxy(request: Request) -> Any:
         body = await request.json()
-        # Optional Repo-Map enrichment for external IDE extensions
         if request.headers.get("X-NGLAI-RepoMap", "").lower() in ("1", "true", "yes"):
             msgs = body.get("messages") or []
             last_user = next((m.get("content", "") for m in reversed(msgs) if m.get("role") == "user"), "")
@@ -297,7 +359,7 @@ def create_app(
         is_stream = bool(body.get("stream", False))
 
         if is_stream:
-            async def event_Connect() -> Any:
+            async def event_stream() -> Any:
                 try:
                     async with httpx.AsyncClient(timeout=600.0) as client:
                         async with client.stream("POST", target_url, json=body) as upstream:
@@ -308,7 +370,7 @@ def create_app(
                     err = f'data: {{"error": "Engine local offline em {target_url}: {exc}"}}\n\n'
                     yield err.encode("utf-8")
 
-            return StreamingResponse(event_Connect(), media_type="text/event-stream")
+            return StreamingResponse(event_stream(), media_type="text/event-stream")
 
         try:
             async with httpx.AsyncClient(timeout=600.0) as client:

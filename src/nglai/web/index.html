@@ -37,10 +37,21 @@
 
     <div class="engine-controls">
       <select id="modelSelect" title="Selecionar modelo comprimido"></select>
+      <button id="pullModelBtn" class="btn small secondary" title="Baixar modelo selecionado para o Vault">⬇ Baixar Modelo</button>
       <span id="engineBadge" class="status-badge offline">Standby</span>
       <button id="engineToggleBtn" class="btn primary">Iniciar Motor</button>
     </div>
   </header>
+
+  <div id="downloadBanner" class="download-banner hidden">
+    <div class="dl-info">
+      <strong id="dlTitle">⬇ Baixando modelo...</strong>
+      <span id="dlStats">0.00 / 0.00 GB (0%)</span>
+    </div>
+    <div class="progress-track">
+      <div id="dlBar" class="progress-fill" style="width: 0%"></div>
+    </div>
+  </div>
 
   <main class="workspace-grid">
     <!-- Left Sidebar: Explorer / Repo-Map / Vault & Split -->

@@ -4,6 +4,11 @@
   const kvVal = document.getElementById("kvVal");
   const speedVal = document.getElementById("speedVal");
   const modelSelect = document.getElementById("modelSelect");
+  const pullModelBtn = document.getElementById("pullModelBtn");
+  const downloadBanner = document.getElementById("downloadBanner");
+  const dlTitle = document.getElementById("dlTitle");
+  const dlStats = document.getElementById("dlStats");
+  const dlBar = document.getElementById("dlBar");
   const engineBadge = document.getElementById("engineBadge");
   const engineToggleBtn = document.getElementById("engineToggleBtn");
   const fileTree = document.getElementById("fileTree");
@@ -150,6 +155,58 @@
       body: JSON.stringify({ model_id: modelSelect.value }),
     });
     await loadTelemetry();
+  });
+
+  let dlPollTimer = null;
+
+  async function pollDownloadStatus() {
+    try {
+      const res = await fetch("/api/vault/pull-status");
+      const st = await res.json();
+      if (st.active) {
+        downloadBanner.classList.remove("hidden");
+        pullModelBtn.disabled = true;
+        const doneGb = (st.downloaded_bytes / (1024 ** 3)).toFixed(2);
+        const totGb = st.total_bytes > 0 ? (st.total_bytes / (1024 ** 3)).toFixed(2) : "?";
+        const pct = st.total_bytes > 0 ? Math.min(100, (st.downloaded_bytes / st.total_bytes) * 100) : 5;
+        dlTitle.textContent = `⬇ Baixando ${st.model_id}...`;
+        dlStats.textContent = `${doneGb} / ${totGb} GB (${pct.toFixed(1)}%)`;
+        dlBar.style.width = `${pct}%`;
+      } else {
+        if (dlPollTimer) {
+          clearInterval(dlPollTimer);
+          dlPollTimer = null;
+        }
+        pullModelBtn.disabled = false;
+        if (st.error) {
+          dlTitle.textContent = `❌ Erro no download: ${st.error}`;
+        } else if (st.done_path) {
+          dlTitle.textContent = `✅ Modelo pronto em ${st.done_path}! Clique em "Iniciar Motor".`;
+          dlBar.style.width = "100%";
+          await loadModels();
+          setTimeout(() => downloadBanner.classList.add("hidden"), 6000);
+        } else {
+          downloadBanner.classList.add("hidden");
+        }
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
+  pullModelBtn.addEventListener("click", async () => {
+    downloadBanner.classList.remove("hidden");
+    dlTitle.textContent = `⬇ Iniciando download de ${modelSelect.value}...`;
+    dlStats.textContent = "Conectando ao HuggingFace...";
+    dlBar.style.width = "2%";
+    await fetch("/api/vault/pull", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ model_id: modelSelect.value }),
+    });
+    if (!dlPollTimer) {
+      dlPollTimer = setInterval(pollDownloadStatus, 1200);
+    }
   });
 
   engineToggleBtn.addEventListener("click", async () => {

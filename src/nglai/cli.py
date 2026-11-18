@@ -22,6 +22,7 @@ from .agent.repomap import RepoMapper
 from .config import NGLAIConfig
 from .engine.catalog import MODEL_CATALOG, get_model_spec
 from .engine.hardware import calculate_surgical_split, detect_hardware
+from .engine.installer import install_llama_engine
 from .engine.runtime import EngineRuntime
 from .server import create_app
 
@@ -236,6 +237,11 @@ def main(argv: Optional[list[str]] = None) -> int:
     web_p.add_argument("--host", default=None)
     web_p.add_argument("--port", type=int, default=None)
 
+    up_p = sub.add_parser("up", help="Tudo-em-um: instala motor se faltar, sobe modelo se baixado e abre o Painel Web")
+    up_p.add_argument("--host", default=None)
+    up_p.add_argument("--port", type=int, default=None)
+    up_p.add_argument("--pull", action="store_true", help="Baixa automaticamente o modelo ativo se ainda não existir")
+
     vault_p = sub.add_parser("vault", help="Gerencia modelos entre Hot SSD (256GB) e Cold HDD (1TB)")
     vault_p.add_argument("action", choices=["list", "pull", "evict", "set-paths"])
     vault_p.add_argument("model_id", nargs="?", default=None)
@@ -243,7 +249,8 @@ def main(argv: Optional[list[str]] = None) -> int:
     vault_p.add_argument("--cold-hdd", default=None, help="Cofre de modelos no HDD de 1TB")
 
     eng_p = sub.add_parser("engine", help="Controla o motor local llama-server + TurboQuant")
-    eng_p.add_argument("action", choices=["status", "start", "stop", "cmd"])
+    eng_p.add_argument("action", choices=["status", "start", "stop", "cmd", "install"])
+    eng_p.add_argument("--backend", default="auto", choices=["auto", "cuda", "vulkan", "cpu"])
 
     args = parser.parse_args(argv)
     cfg = NGLAIConfig.load()
@@ -257,6 +264,52 @@ def main(argv: Optional[list[str]] = None) -> int:
     if cmd == "ide":
         print_ide_integration(cfg)
         return 0
+    if cmd == "up":
+        host = args.host or cfg.web_host
+        port = args.port or cfg.web_port
+        if runtime.find_llama_server_binary() is None:
+            console.print("[cyan]⚙️ Binário llama-server não detectado. Instalando automaticamente p/ seu hardware...[/cyan]")
+
+            def _inst_prog(fname: str, done: int, total: int) -> None:
+                if total > 0:
+                    sys.stdout.write(f"\r  ⬇ {fname}: {done / (1024**2):.1f}/{total / (1024**2):.1f} MB")
+                    sys.stdout.flush()
+
+            exe = install_llama_engine(cfg, backend="auto", progress_cb=_inst_prog)
+            console.print(f"\n[green]✓ Motor instalado em: {exe}[/green]")
+
+        if args.pull and runtime.vault.resolve_active_path(cfg.active_model_id, promote_to_hot=False) is None:
+            console.print(f"[cyan]⬇ Baixando modelo ativo '{cfg.active_model_id}'...[/cyan]")
+
+            def _pull_prog(done: int, total: int) -> None:
+                if total > 0:
+                    sys.stdout.write(f"\r  Progresso: {done / (1024**3):.2f}/{total / (1024**3):.2f} GB ({(done/total)*100:.1f}%)")
+                    sys.stdout.flush()
+
+            runtime.vault.download_model(cfg.active_model_id, progress_cb=_pull_prog, activate_hot=True)
+            console.print("\n[green]✓ Modelo baixado![/green]")
+
+        if runtime.vault.resolve_active_path(cfg.active_model_id, promote_to_hot=True) is not None:
+            console.print(f"[cyan]🚀 Subindo motor local com '{cfg.active_model_id}'...[/cyan]")
+            st = runtime.start(cfg.active_model_id, wait_seconds=90)
+            console.print(f"[green]✓ {st.message} ({st.endpoint})[/green]")
+        else:
+            console.print(
+                f"[yellow]ℹ️ Modelo '{cfg.active_model_id}' ainda não baixado. "
+                f"Você pode baixá-lo com 1 clique direto no Painel Web![/yellow]"
+            )
+
+        console.print(
+            Panel.fit(
+                f"🌐 [bold green]New-Gen-Local-AI Pronto![/bold green]\n"
+                f"Abra no navegador: [underline cyan]http://{host}:{port}[/underline cyan]\n"
+                f"Gateway VS Code (Cline/Roo): [underline yellow]http://{host}:{port}/v1[/underline yellow]",
+                border_style="green",
+            )
+        )
+        app = create_app(config=cfg, workspace_root=workspace, runtime_instance=runtime)
+        uvicorn.run(app, host=host, port=port, log_level="info")
+        return 0
     if cmd == "web":
         host = args.host or cfg.web_host
         port = args.port or cfg.web_port
@@ -268,7 +321,7 @@ def main(argv: Optional[list[str]] = None) -> int:
                 border_style="green",
             )
         )
-        app = create_app(config=cfg, workspace_root=workspace)
+        app = create_app(config=cfg, workspace_root=workspace, runtime_instance=runtime)
         uvicorn.run(app, host=host, port=port, log_level="info")
         return 0
     if cmd == "vault":
@@ -299,12 +352,25 @@ def main(argv: Optional[list[str]] = None) -> int:
             console.print(f"\n[bold green]✓ Modelo pronto em: {dest}[/bold green]")
         return 0
     if cmd == "engine":
-        if args.action == "status":
+        if args.action == "install":
+            console.print(f"[cyan]⚙️ Instalando binários llama-server (backend={args.backend})...[/cyan]")
+
+            def _p(fname: str, done: int, total: int) -> None:
+                if total > 0:
+                    sys.stdout.write(f"\r  ⬇ {fname}: {done / (1024**2):.1f}/{total / (1024**2):.1f} MB")
+                    sys.stdout.flush()
+
+            exe = install_llama_engine(cfg, backend=args.backend, progress_cb=_p)
+            console.print(f"\n[bold green]✓ Instalado com sucesso em: {exe}[/bold green]")
+        elif args.action == "status":
             st = runtime.status()
             console.print(st)
         elif args.action == "cmd":
             render_hardware_and_split(cfg)
         elif args.action == "start":
+            if runtime.find_llama_server_binary() is None:
+                console.print("[cyan]Instalando llama-server automaticamente...[/cyan]")
+                install_llama_engine(cfg, backend="auto")
             st = runtime.start()
             console.print(f"[green]✓ {st.message} ({st.endpoint})[/green]")
         elif args.action == "stop":

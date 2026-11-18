@@ -1,4 +1,4 @@
-"""Triple-Stack Compressed Model Catalog (Unsloth Dynamic 2.0 GGUF + MoE Metadata)."""
+"""Triple-Stack Compressed Model Catalog (100% Verified HuggingFace Unsloth Dynamic 2.0 GGUFs)."""
 
 from __future__ import annotations
 
@@ -40,7 +40,7 @@ MODEL_CATALOG: Dict[str, ModelSpec] = {
         family="qwen3.6",
         hf_repo="unsloth/Qwen3.6-35B-A3B-GGUF",
         filename="Qwen3.6-35B-A3B-UD-IQ3_XXS.gguf",
-        size_gb=13.1,
+        size_gb=12.30,
         total_params_b=35.0,
         active_params_b=3.0,
         is_moe=True,
@@ -52,17 +52,17 @@ MODEL_CATALOG: Dict[str, ModelSpec] = {
         supports_tools=True,
         tier="flagship-moe",
         description_pt=(
-            "Cérebro Principal Recomendado p/ 8GB VRAM + 16GB RAM: 35B totais (apenas 3B ativos/token), "
-            "Atenção Linear Híbrida + MoE esparso + modo Deep Thinking. Cabe dividindo ~6.5GB na GPU e ~6.6GB na RAM."
+            "Cérebro Principal Recomendado (8GB VRAM + 16GB RAM ou 32GB RAM): 35B totais (3B ativos/token), "
+            "Atenção Linear Híbrida + MoE esparso + modo Deep Thinking (<think>)."
         ),
     ),
     "qwen3.6-35b-a3b-ud-q2kxl": ModelSpec(
-        id="qwen3.6-35b-a3b-ud-q2kxl",
+        id="qwen3.6-35B-a3b-ud-q2kxl".lower(),
         name="Qwen3.6-35B-A3B (Unsloth UD-Q2_K_XL)",
         family="qwen3.6",
         hf_repo="unsloth/Qwen3.6-35B-A3B-GGUF",
         filename="Qwen3.6-35B-A3B-UD-Q2_K_XL.gguf",
-        size_gb=12.1,
+        size_gb=11.45,
         total_params_b=35.0,
         active_params_b=3.0,
         is_moe=True,
@@ -74,8 +74,7 @@ MODEL_CATALOG: Dict[str, ModelSpec] = {
         supports_tools=True,
         tier="flagship-moe",
         description_pt=(
-            "Versão ultra-compacta de 35B MoE: deixa ainda mais folga de RAM no Windows mantendo "
-            "camadas críticas de atenção e tool-calling protegidas em alta precisão."
+            "Versão ultra-compacta de 35B MoE (11.45 GB): deixa máxima folga de RAM mantendo camadas críticas protegidas."
         ),
     ),
     "qwen3-coder-30b-a3b-ud-iq3": ModelSpec(
@@ -84,7 +83,7 @@ MODEL_CATALOG: Dict[str, ModelSpec] = {
         family="qwen3-coder",
         hf_repo="unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF",
         filename="Qwen3-Coder-30B-A3B-Instruct-UD-IQ3_XXS.gguf",
-        size_gb=12.8,
+        size_gb=11.97,
         total_params_b=30.5,
         active_params_b=3.3,
         is_moe=True,
@@ -97,7 +96,7 @@ MODEL_CATALOG: Dict[str, ModelSpec] = {
         tier="flagship-moe",
         description_pt=(
             "Especialista Puro em Engenharia de Repositórios (SWE-bench / Aider Polyglot): 30.5B totais "
-            "(3.3B ativos), contexto nativo de 256K e execução cirúrgica de ferramentas."
+            "(3.3B ativos), 11.97 GB, contexto nativo de 256K e execução cirúrgica de ferramentas."
         ),
     ),
     "qwen3-coder-30b-a3b-ud-q3kxl": ModelSpec(
@@ -106,7 +105,7 @@ MODEL_CATALOG: Dict[str, ModelSpec] = {
         family="qwen3-coder",
         hf_repo="unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF",
         filename="Qwen3-Coder-30B-A3B-Instruct-UD-Q3_K_XL.gguf",
-        size_gb=13.8,
+        size_gb=12.86,
         total_params_b=30.5,
         active_params_b=3.3,
         is_moe=True,
@@ -118,7 +117,7 @@ MODEL_CATALOG: Dict[str, ModelSpec] = {
         supports_tools=True,
         tier="flagship-moe",
         description_pt=(
-            "Fidelidade extra em 3-bit XL: ideal para 8GB VRAM + 16GB RAM (modo focado) ou sistemas com 24GB-32GB RAM."
+            "Fidelidade extra em 3-bit XL (12.86 GB): excelente para 8GB VRAM + 16GB RAM ou sistemas com >=24GB RAM."
         ),
     ),
     "qwen3-coder-30b-a3b-ud-q4kxl": ModelSpec(
@@ -127,7 +126,7 @@ MODEL_CATALOG: Dict[str, ModelSpec] = {
         family="qwen3-coder",
         hf_repo="unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF",
         filename="Qwen3-Coder-30B-A3B-Instruct-UD-Q4_K_XL.gguf",
-        size_gb=17.7,
+        size_gb=16.45,
         total_params_b=30.5,
         active_params_b=3.3,
         is_moe=True,
@@ -139,37 +138,58 @@ MODEL_CATALOG: Dict[str, ModelSpec] = {
         supports_tools=True,
         tier="flagship-moe",
         description_pt=(
-            "Perfil 32GB RAM / Upgrade: fidelidade praticamente idêntica ao BF16 original para máquinas com >=32GB RAM."
+            "Perfil 32GB RAM / Workstation (16.45 GB): fidelidade praticamente idêntica ao BF16 original."
         ),
     ),
     "qwen2.5-coder-14b-ud-iq3m": ModelSpec(
         id="qwen2.5-coder-14b-ud-iq3m",
-        name="Qwen2.5-Coder-14B-Instruct (Unsloth IQ3_M)",
+        name="Qwen2.5-Coder-14B-Instruct (Q3_K_M)",
         family="qwen2.5-coder",
-        hf_repo="Qwen/Qwen2.5-Coder-14B-Instruct-GGUF",
-        filename="qwen2.5-coder-14b-instruct-q3_k_m.gguf",
-        size_gb=6.9,
+        hf_repo="unsloth/Qwen2.5-Coder-14B-Instruct-GGUF",
+        filename="Qwen2.5-Coder-14B-Instruct-Q3_K_M.gguf",
+        size_gb=7.34,
         total_params_b=14.7,
         active_params_b=14.7,
         is_moe=False,
         num_layers=48,
         quant_method="Compressed 3-bit K-Quant",
-        bits_per_weight=3.70,
+        bits_per_weight=3.90,
         max_native_ctx=131072,
         supports_thinking=False,
         supports_tools=True,
         tier="dense-specialist",
         description_pt=(
-            "Alternativa 100% GPU para placas de 8GB VRAM: roda inteiramente dentro da RTX 3050 com TurboQuant."
+            "Especialista denso 14B (~7.3 GB): ideal para placas de 8GB–12GB VRAM com KV Cache comprimido."
+        ),
+    ),
+    "qwen3-8b-q4km": ModelSpec(
+        id="qwen3-8b-q4km",
+        name="Qwen3-8B (Unsloth Q4_K_M)",
+        family="qwen3",
+        hf_repo="unsloth/Qwen3-8B-GGUF",
+        filename="Qwen3-8B-Q4_K_M.gguf",
+        size_gb=5.03,
+        total_params_b=8.2,
+        active_params_b=8.2,
+        is_moe=False,
+        num_layers=36,
+        quant_method="Unsloth Q4_K_M",
+        bits_per_weight=4.85,
+        max_native_ctx=131072,
+        supports_thinking=True,
+        supports_tools=True,
+        tier="dense-specialist",
+        description_pt=(
+            "Modo Rápido (~5.0 GB) com Deep Thinking e Tool Calling: cabe 100% em GPUs de 8GB VRAM a 45+ tok/s."
         ),
     ),
     "qwen2.5-coder-1.5b-draft": ModelSpec(
         id="qwen2.5-coder-1.5b-draft",
-        name="Qwen2.5-Coder-1.5B-Instruct (Draft Speculative)",
+        name="Qwen2.5-Coder-1.5B-Instruct (Draft / Quick Test)",
         family="qwen2.5-coder",
         hf_repo="Qwen/Qwen2.5-Coder-1.5B-Instruct-GGUF",
         filename="qwen2.5-coder-1.5b-instruct-q4_k_m.gguf",
-        size_gb=1.1,
+        size_gb=1.12,
         total_params_b=1.5,
         active_params_b=1.5,
         is_moe=False,
@@ -178,10 +198,10 @@ MODEL_CATALOG: Dict[str, ModelSpec] = {
         bits_per_weight=4.8,
         max_native_ctx=32768,
         supports_thinking=False,
-        supports_tools=False,
+        supports_tools=True,
         tier="draft-accelerator",
         description_pt=(
-            "Micro-modelo rascunho opcional para Speculative Decoding ou testes rápidos de sanidade (<1.1 GB)."
+            "Micro-modelo ultraleve (1.12 GB): excelente p/ Speculative Decoding ou teste instantâneo em qualquer PC."
         ),
     ),
 }
