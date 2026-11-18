@@ -145,21 +145,29 @@ class ModelVault:
 
             existing_bytes = part_file.stat().st_size if part_file.exists() else 0
 
-            # Probe final redirect URL and total size via Range: bytes=0-0
+            # Probe final redirect URL and total size via stream headers ONLY (never buffer body!)
             probe_headers = {**base_headers, "Range": "bytes=0-0"}
             with httpx.Client(follow_redirects=True, timeout=30.0) as probe_client:
-                probe = probe_client.get(spec.hf_download_url, headers=probe_headers)
-                resolved_url = str(probe.url)
-                content_range = probe.headers.get("Content-Range", "")
-                supports_range = probe.status_code == 206 and "/" in content_range
-                total_bytes = int(content_range.split("/")[-1]) if supports_range else int(probe.headers.get("Content-Length") or 0)
+                with probe_client.stream("GET", spec.hf_download_url, headers=probe_headers) as probe:
+                    resolved_url = str(probe.url)
+                    content_range = probe.headers.get("Content-Range", "")
+                    supports_range = probe.status_code == 206 and "/" in content_range
+                    total_bytes = (
+                        int(content_range.split("/")[-1])
+                        if supports_range
+                        else int(probe.headers.get("Content-Length") or 0)
+                    )
 
-            if total_bytes > 0 and existing_bytes >= total_bytes:
+            if total_bytes > 0 and existing_bytes >= total_bytes and existing_bytes > 0:
                 part_file.replace(final_cold)
             elif supports_range and total_bytes > (existing_bytes + 8 * 1024 * 1024) and parallel_workers > 1:
-                # Pre-extend or open random-access file preserving existing_bytes [0 .. existing_bytes-1]
+                # Pre-extend sparse random-access file preserving existing_bytes [0 .. existing_bytes-1]
                 mode = "r+b" if part_file.exists() else "w+b"
                 with open(part_file, mode) as pre_fh:
+                    if os.name == "nt" and existing_bytes == 0:
+                        import subprocess as _sp
+
+                        _sp.run(["fsutil", "sparse", "setflag", str(part_file)], capture_output=True, check=False)
                     pre_fh.truncate(total_bytes)
 
                 remaining = total_bytes - existing_bytes
