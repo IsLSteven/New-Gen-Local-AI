@@ -165,7 +165,14 @@ def _dispatch_mcp_tool(name: str, args: Dict[str, Any], cfg: NGLAIConfig) -> str
 
 
 def run_stdio_mcp_server() -> int:
-    """Run newline-delimited JSON-RPC 2.0 MCP loop over stdin/stdout."""
+    """Run newline-delimited JSON-RPC 2.0 MCP loop over UTF-8 stdin/stdout pipes."""
+    if hasattr(sys.stdin, "reconfigure"):
+        sys.stdin.reconfigure(encoding="utf-8", errors="replace")
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    if hasattr(sys.stderr, "reconfigure"):
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
     cfg = NGLAIConfig.load()
     for raw_line in sys.stdin:
         line = raw_line.strip()
@@ -180,3 +187,7 @@ def run_stdio_mcp_server() -> int:
             sys.stdout.write(json.dumps(resp, ensure_ascii=False) + "\n")
             sys.stdout.flush()
     return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(run_stdio_mcp_server())
