@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import os
+import re
 import threading
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -15,6 +17,7 @@ from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from .agent.compactor import compact_openai_payload_messages
 from .agent.orchestrator import AgentEvent, CompoundCodingAgent
 from .agent.repomap import IGNORED_DIRS, RepoMapper
 from .config import NGLAIConfig
@@ -37,6 +40,38 @@ class ModelPullRequest(BaseModel):
 class StoragePathsRequest(BaseModel):
     hot_ssd_dir: str
     cold_hdd_dir: str
+
+
+_CTX_LIMIT_RE = re.compile(r"available context size \((\d+) tokens\)", re.IGNORECASE)
+
+
+def _parse_upstream_error(raw_bytes: bytes, status_code: int) -> Dict[str, Any]:
+    """Always normalize upstream HTTP error responses into valid OpenAI-style JSON."""
+    raw_text = raw_bytes.decode("utf-8", errors="replace").strip()
+    try:
+        parsed = json.loads(raw_text)
+        if isinstance(parsed, dict):
+            return parsed if "error" in parsed else {"error": parsed}
+    except Exception:
+        pass
+    return {
+        "error": {
+            "message": raw_text or f"Upstream engine returned HTTP {status_code}",
+            "type": "upstream_error",
+            "code": status_code,
+        }
+    }
+
+
+def _extract_context_limit_from_error(err_payload: Dict[str, Any], fallback: int) -> Optional[int]:
+    """Return context limit if upstream failed due to exceed_context_size_error, else None."""
+    err_obj = err_payload.get("error") if isinstance(err_payload, dict) else None
+    msg = str(err_obj.get("message") if isinstance(err_obj, dict) else err_payload)
+    err_type = str(err_obj.get("type") if isinstance(err_obj, dict) else "")
+    if "exceed_context_size_error" in err_type or "exceeds the available context size" in msg.lower():
+        match = _CTX_LIMIT_RE.search(msg)
+        return int(match.group(1)) if match else fallback
+    return None
 
 
 def create_app(
@@ -367,26 +402,72 @@ def create_app(
 
         target_url = f"{runtime.base_url}/v1/chat/completions"
         is_stream = bool(body.get("stream", False))
+        active_ctx = runtime._active_plan.recommended_ctx if runtime._active_plan else cfg.context_size
 
-        if is_stream:
-            async def event_stream() -> Any:
-                try:
-                    async with httpx.AsyncClient(timeout=600.0) as client:
-                        async with client.stream("POST", target_url, json=body) as upstream:
-                            upstream.raise_for_status()
-                            async for chunk in upstream.aiter_bytes():
-                                yield chunk
-                except Exception as exc:
-                    err = f'data: {{"error": "Engine local offline em {target_url}: {exc}"}}\n\n'
-                    yield err.encode("utf-8")
-
-            return StreamingResponse(event_stream(), media_type="text/event-stream")
-
+        client = httpx.AsyncClient(timeout=httpx.Timeout(30.0, read=600.0))
         try:
-            async with httpx.AsyncClient(timeout=600.0) as client:
-                resp = await client.post(target_url, json=body)
-                return JSONResponse(status_code=resp.status_code, content=resp.json())
+            req = client.build_request("POST", target_url, json=body)
+            upstream = await client.send(req, stream=is_stream)
+
+            # Auto-recover seamlessly if client history + tool schemas overflowed local slot context
+            if upstream.status_code == 400 and isinstance(body.get("messages"), list):
+                err_bytes = await upstream.aread()
+                await upstream.aclose()
+                err_payload = _parse_upstream_error(err_bytes, upstream.status_code)
+                ctx_limit = _extract_context_limit_from_error(err_payload, fallback=active_ctx)
+                if ctx_limit is not None:
+                    compacted_msgs, changed = compact_openai_payload_messages(
+                        body["messages"],
+                        max_context_tokens=ctx_limit,
+                    )
+                    if changed:
+                        body["messages"] = compacted_msgs
+                        retry_req = client.build_request("POST", target_url, json=body)
+                        upstream = await client.send(retry_req, stream=is_stream)
+                    else:
+                        await client.aclose()
+                        return JSONResponse(status_code=400, content=err_payload)
+                else:
+                    await client.aclose()
+                    return JSONResponse(status_code=400, content=err_payload)
+
+            if upstream.status_code >= 400:
+                err_bytes = await upstream.aread()
+                await upstream.aclose()
+                await client.aclose()
+                return JSONResponse(
+                    status_code=upstream.status_code,
+                    content=_parse_upstream_error(err_bytes, upstream.status_code),
+                )
+
+            if is_stream:
+                async def event_stream() -> Any:
+                    try:
+                        async for chunk in upstream.aiter_bytes():
+                            yield chunk
+                    except Exception as exc:
+                        err_json = json.dumps(
+                            {
+                                "error": {
+                                    "message": f"Erro de conexão no stream com {target_url}: {exc}",
+                                    "type": "proxy_stream_error",
+                                }
+                            },
+                            ensure_ascii=False,
+                        )
+                        yield f"data: {err_json}\n\n".encode("utf-8")
+                    finally:
+                        await upstream.aclose()
+                        await client.aclose()
+
+                return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+            raw_ok = await upstream.aread()
+            await upstream.aclose()
+            await client.aclose()
+            return JSONResponse(status_code=upstream.status_code, content=json.loads(raw_ok))
         except Exception as exc:
+            await client.aclose()
             raise HTTPException(
                 status_code=503,
                 detail=f"Motor llama-server indisponível em {target_url}: {exc}",

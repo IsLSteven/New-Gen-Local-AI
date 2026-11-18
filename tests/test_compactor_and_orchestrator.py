@@ -6,7 +6,7 @@ from typing import List
 
 import httpx
 
-from nglai.agent.compactor import compact_conversation
+from nglai.agent.compactor import compact_conversation, compact_openai_payload_messages
 from nglai.agent.orchestrator import (
     AgentEvent,
     CompoundCodingAgent,
@@ -40,6 +40,30 @@ def test_context_compactor_shrinks_history() -> None:
     assert did_compact is True
     assert after < before
     assert compacted[0]["role"] == "system"
+
+
+def test_openai_payload_compactor_preserves_atomic_tool_pairs() -> None:
+    msgs = [{"role": "system", "content": "System rules"}]
+    for i in range(6):
+        msgs.append({"role": "user", "content": f"Pedido {i}: " + ("abc " * 400)})
+        msgs.append(
+            {
+                "role": "assistant",
+                "content": "<think>longo pensamento antigo</think>",
+                "tool_calls": [{"id": f"call_{i}", "type": "function", "function": {"name": "read_file", "arguments": "{}"}}],
+            }
+        )
+        msgs.append({"role": "tool", "tool_call_id": f"call_{i}", "name": "read_file", "content": "ok " * 300})
+
+    compacted, changed = compact_openai_payload_messages(msgs, max_context_tokens=8192)
+    assert changed is True
+    assert compacted[0]["role"] == "system"
+    # No orphan 'tool' message immediately after system or summary
+    for idx, m in enumerate(compacted):
+        if m.get("role") == "tool":
+            assert idx > 0
+            prev = compacted[idx - 1]
+            assert prev.get("role") in ("assistant", "tool")
 
 
 def test_compound_agent_end_to_end_mocked_loop(tmp_path: Path) -> None:

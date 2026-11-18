@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
     Instala automaticamente os binários pré-compilados do llama.cpp (CUDA / Vulkan / CPU)
     ou compila opcionalmente o fork experimental llama-cpp-turboquant a partir do código-fonte.

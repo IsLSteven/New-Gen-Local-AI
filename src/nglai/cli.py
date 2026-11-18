@@ -26,6 +26,17 @@ from .engine.installer import install_llama_engine
 from .engine.runtime import EngineRuntime
 from .server import create_app
 
+if hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+if hasattr(sys.stderr, "reconfigure"):
+    try:
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 console = Console()
 
 
@@ -222,6 +233,11 @@ def interactive_chat(cfg: NGLAIConfig, workspace: Path) -> None:
 
 
 def main(argv: Optional[list[str]] = None) -> int:
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    if hasattr(sys.stderr, "reconfigure"):
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--workspace", "-w", default=None, help="Diretório do projeto alvo")
 

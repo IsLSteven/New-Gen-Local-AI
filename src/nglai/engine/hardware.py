@@ -102,6 +102,8 @@ class SplitPlan:
     estimated_ram_gb: float
     estimated_tok_per_sec: str
     recommended_model_id: str
+    single_slot: bool = True
+    no_reasoning_preserve: bool = True
     notes_pt: List[str] = field(default_factory=list)
 
     def to_llama_args(self, turboquant_supported: bool = False) -> List[str]:
@@ -115,6 +117,10 @@ class SplitPlan:
             str(self.cpu_threads),
             "--jinja",
         ]
+        if self.single_slot:
+            args.extend(["-np", "1"])
+        if self.no_reasoning_preserve:
+            args.append("--no-reasoning-preserve")
         if self.flash_attention:
             args.extend(["-fa", "on"])
 
@@ -249,8 +255,8 @@ def _kv_gb_per_1k_ctx(kv_mode: str, is_hybrid_linear: bool) -> float:
         "q8_0": 0.048,
         "f16": 0.095,
     }.get(kv_mode, 0.024)
-    # Qwen3.6 hybrid linear-attention slashes KV growth even further
-    return base * (0.65 if is_hybrid_linear else 1.0)
+    # Qwen3.6 Gated DeltaNet hybrid architecture has full KV cache on only ~25% of layers
+    return base * (0.35 if is_hybrid_linear else 1.0)
 
 
 def recommend_best_model_id(hw: HardwareProfile) -> str:
@@ -302,7 +308,7 @@ def calculate_surgical_split(
 
     kv_gb = round(_kv_gb_per_1k_ctx(chosen_kv, is_linear_hybrid) * (ctx / 1024.0), 2)
     # Shrink context automatically on ultra-tight 4GB VRAM so attention never OOMs
-    max_tight_ctx = 8192 if chosen_kv == "f16" else 16384
+    max_tight_ctx = 16384 if (chosen_kv != "f16" or is_linear_hybrid) else 8192
     if hw.has_cuda and usable_vram < 3.4 and ctx > max_tight_ctx:
         ctx = max_tight_ctx
         kv_gb = round(_kv_gb_per_1k_ctx(chosen_kv, is_linear_hybrid) * (ctx / 1024.0), 2)

@@ -85,11 +85,11 @@ class EngineRuntime:
     def status(self) -> EngineStatus:
         healthy = self.is_healthy()
         pid = self._process.pid if (self._process and self._process.poll() is None) else None
-        kv_used = (
-            self._active_plan.kv_cache_type_k
-            if (self._active_plan and self._turboquant_active)
-            else ("q4_0" if self._active_plan else self.config.kv_cache_mode)
-        )
+        if self._active_plan:
+            raw_kv = self._active_plan.kv_cache_type_k
+            kv_used = "q4_0" if (raw_kv.startswith("turbo") and not self._turboquant_active) else raw_kv
+        else:
+            kv_used = self.config.kv_cache_mode
         mode = self._active_plan.execution_mode if self._active_plan else "standby"
         msg = "Motor Triple-Stack online e pronto" if healthy else "Motor parado (aguardando inicialização)"
         return EngineStatus(
