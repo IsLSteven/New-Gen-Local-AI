@@ -1,9 +1,11 @@
-"""Hot/Cold Model Vault (256GB SSD <-> 1TB HDD Tiering) & Resumable GGUF Downloader."""
+"""Hot/Cold Model Vault (256GB SSD <-> 1TB HDD Tiering) & Parallel Multi-Stream GGUF Downloader."""
 
 from __future__ import annotations
 
 import os
 import shutil
+import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Dict, List, Optional
@@ -92,7 +94,6 @@ class ModelVault:
                 shutil.copy2(cp, tmp_target)
                 tmp_target.replace(hp)
                 return hp
-            # Not enough room on SSD -> run directly from Cold HDD gracefully
             return cp
 
         return None
@@ -122,10 +123,11 @@ class ModelVault:
         model_id: str,
         progress_cb: Optional[Callable[[int, int], None]] = None,
         activate_hot: bool = True,
+        parallel_workers: int = 6,
     ) -> Path:
         """
-        Download GGUF from HuggingFace with HTTP Range resume support directly into Cold Vault,
-        then optionally stage into Hot SSD. Never touches the OS C: drive cache.
+        Multi-connection parallel HTTP Range downloader with seamless resume from existing .part files.
+        Avoids single-stream CDN throttling on large 12GB-18GB GGUF downloads.
         """
         spec = get_model_spec(model_id)
         if not spec:
@@ -136,29 +138,78 @@ class ModelVault:
         part_file = final_cold.with_suffix(".gguf.part")
 
         if not final_cold.exists():
-            existing_bytes = part_file.stat().st_size if part_file.exists() else 0
-            headers: Dict[str, str] = {}
+            base_headers: Dict[str, str] = {"User-Agent": "New-Gen-Local-AI-Vault/0.1"}
             hf_token = os.environ.get("HF_TOKEN")
             if hf_token:
-                headers["Authorization"] = f"Bearer {hf_token}"
-            if existing_bytes > 0:
-                headers["Range"] = f"bytes={existing_bytes}-"
+                base_headers["Authorization"] = f"Bearer {hf_token}"
 
-            with httpx.Client(follow_redirects=True, timeout=httpx.Timeout(60.0, read=300.0)) as client:
-                with client.stream("GET", spec.hf_download_url, headers=headers) as resp:
-                    if resp.status_code == 416:
-                        # Range already satisfied
-                        part_file.replace(final_cold)
-                    else:
+            existing_bytes = part_file.stat().st_size if part_file.exists() else 0
+
+            # Probe final redirect URL and total size via Range: bytes=0-0
+            probe_headers = {**base_headers, "Range": "bytes=0-0"}
+            with httpx.Client(follow_redirects=True, timeout=30.0) as probe_client:
+                probe = probe_client.get(spec.hf_download_url, headers=probe_headers)
+                resolved_url = str(probe.url)
+                content_range = probe.headers.get("Content-Range", "")
+                supports_range = probe.status_code == 206 and "/" in content_range
+                total_bytes = int(content_range.split("/")[-1]) if supports_range else int(probe.headers.get("Content-Length") or 0)
+
+            if total_bytes > 0 and existing_bytes >= total_bytes:
+                part_file.replace(final_cold)
+            elif supports_range and total_bytes > (existing_bytes + 8 * 1024 * 1024) and parallel_workers > 1:
+                # Pre-extend or open random-access file preserving existing_bytes [0 .. existing_bytes-1]
+                mode = "r+b" if part_file.exists() else "w+b"
+                with open(part_file, mode) as pre_fh:
+                    pre_fh.truncate(total_bytes)
+
+                remaining = total_bytes - existing_bytes
+                chunk_span = max(4 * 1024 * 1024, (remaining + parallel_workers - 1) // parallel_workers)
+                ranges: List[tuple[int, int]] = []
+                cursor = existing_bytes
+                while cursor < total_bytes:
+                    end = min(total_bytes - 1, cursor + chunk_span - 1)
+                    ranges.append((cursor, end))
+                    cursor = end + 1
+
+                lock = threading.Lock()
+                state = {"done": existing_bytes}
+
+                def _fetch_slice(start_b: int, end_b: int) -> None:
+                    hdrs = {**base_headers, "Range": f"bytes={start_b}-{end_b}"}
+                    with httpx.Client(follow_redirects=True, timeout=httpx.Timeout(30.0, read=300.0)) as w_client:
+                        with w_client.stream("GET", resolved_url, headers=hdrs) as r_stream:
+                            r_stream.raise_for_status()
+                            offset = start_b
+                            with open(part_file, "r+b") as seg_fh:
+                                seg_fh.seek(offset)
+                                for chunk in r_stream.iter_bytes(chunk_size=1024 * 512):
+                                    if chunk:
+                                        seg_fh.write(chunk)
+                                        with lock:
+                                            state["done"] += len(chunk)
+                                            cur_done = state["done"]
+                                        if progress_cb:
+                                            progress_cb(cur_done, total_bytes)
+
+                with ThreadPoolExecutor(max_workers=len(ranges)) as pool:
+                    futures = [pool.submit(_fetch_slice, s, e) for s, e in ranges]
+                    for fut in as_completed(futures):
+                        fut.result()
+
+                part_file.replace(final_cold)
+            else:
+                # Single-stream fallback
+                headers = dict(base_headers)
+                if existing_bytes > 0:
+                    headers["Range"] = f"bytes={existing_bytes}-"
+                with httpx.Client(follow_redirects=True, timeout=httpx.Timeout(60.0, read=300.0)) as client:
+                    with client.stream("GET", spec.hf_download_url, headers=headers) as resp:
                         resp.raise_for_status()
-                        mode = "ab" if resp.status_code == 206 and existing_bytes > 0 else "wb"
-                        if mode == "wb":
+                        f_mode = "ab" if resp.status_code == 206 and existing_bytes > 0 else "wb"
+                        if f_mode == "wb":
                             existing_bytes = 0
-                        total_header = resp.headers.get("Content-Length")
-                        total_bytes = (existing_bytes + int(total_header)) if total_header else 0
-
                         downloaded = existing_bytes
-                        with open(part_file, mode) as fh:
+                        with open(part_file, f_mode) as fh:
                             for chunk in resp.iter_bytes(chunk_size=1024 * 1024):
                                 if chunk:
                                     fh.write(chunk)
