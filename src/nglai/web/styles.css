@@ -32,61 +32,72 @@ body {
 }
 
 .topbar {
-  height: 60px;
+  min-height: 58px;
+  height: auto;
+  flex-shrink: 0;
   background: #0d1320;
   border-bottom: 1px solid var(--border);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 16px;
-  gap: 14px;
+  flex-wrap: wrap;
+  padding: 8px 14px;
+  gap: 10px 14px;
 }
 
 .brand {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 9px;
+  flex-shrink: 0;
 }
 
 .brand-icon {
-  font-size: 24px;
+  font-size: 22px;
+  line-height: 1;
 }
 
 .brand h1 {
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 700;
+  line-height: 1.2;
   letter-spacing: 0.2px;
 }
 
 .subtitle {
-  font-size: 11px;
+  display: block;
+  font-size: 10.5px;
   color: var(--text-muted);
+  white-space: nowrap;
 }
 
 .telemetry-strip {
   display: flex;
-  gap: 10px;
+  align-items: center;
+  gap: 8px;
   flex-wrap: wrap;
 }
 
 .metric-pill {
   background: var(--bg-elevated);
   border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 4px 10px;
+  border-radius: 7px;
+  padding: 4px 9px;
   display: flex;
   flex-direction: column;
-  min-width: 105px;
+  gap: 1px;
+  white-space: nowrap;
 }
 
 .metric-pill .label {
-  font-size: 10px;
+  font-size: 9.5px;
   text-transform: uppercase;
+  letter-spacing: 0.3px;
   color: var(--text-muted);
 }
 
 .metric-pill strong {
-  font-size: 12px;
+  font-size: 11.5px;
   font-family: var(--font-mono);
 }
 
@@ -97,7 +108,14 @@ body {
 .engine-controls {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 7px;
+  flex-shrink: 0;
+  flex-wrap: nowrap;
+}
+
+#modelSelect {
+  max-width: 245px;
+  text-overflow: ellipsis;
 }
 
 select, .text-input {
@@ -105,7 +123,7 @@ select, .text-input {
   color: var(--text-main);
   border: 1px solid var(--border);
   border-radius: 6px;
-  padding: 6px 10px;
+  padding: 6px 9px;
   font-size: 12px;
   outline: none;
 }
@@ -115,6 +133,8 @@ select, .text-input {
   font-weight: 600;
   padding: 4px 9px;
   border-radius: 999px;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .status-badge.online {
@@ -133,11 +153,13 @@ select, .text-input {
   cursor: pointer;
   border: 1px solid var(--border);
   border-radius: 6px;
-  padding: 7px 12px;
+  padding: 6px 11px;
   font-size: 12px;
   font-weight: 600;
   color: var(--text-main);
   background: var(--bg-elevated);
+  white-space: nowrap;
+  flex-shrink: 0;
   transition: 0.15s ease;
 }
 
@@ -193,8 +215,17 @@ select, .text-input {
 .workspace-grid {
   flex: 1;
   display: grid;
-  grid-template-columns: 290px 1fr 460px;
+  grid-template-columns: 270px minmax(320px, 1fr) 420px;
   min-height: 0;
+}
+
+@media (max-width: 1200px) {
+  .workspace-grid {
+    grid-template-columns: 230px minmax(260px, 1fr) 360px;
+  }
+  .subtitle {
+    display: none;
+  }
 }
 
 .panel {
