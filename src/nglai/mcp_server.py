@@ -114,8 +114,20 @@ def handle_mcp_request(req: Dict[str, Any], cfg: Optional[NGLAIConfig] = None) -
     }
 
 
+def _resolve_ready_model(runtime: EngineRuntime, preferred_id: str) -> str:
+    if runtime.vault.resolve_active_path(preferred_id, promote_to_hot=False) is not None:
+        return preferred_id
+    for entry in runtime.vault.inspect_catalog():
+        if entry.is_downloaded:
+            return entry.model_id
+    return preferred_id
+
+
 def _dispatch_mcp_tool(name: str, args: Dict[str, Any], cfg: NGLAIConfig) -> str:
+    # Reload fresh config in case active_model_id changed in Web UI / CLI
+    cfg = NGLAIConfig.load(cfg.config_file if Path(cfg.base_dir).exists() else None)
     runtime = EngineRuntime(cfg)
+    ready_model = _resolve_ready_model(runtime, cfg.active_model_id)
 
     if name == "get_local_ai_status":
         hw = detect_hardware(cfg.hot_ssd_dir, cfg.cold_hdd_dir)
@@ -138,14 +150,14 @@ def _dispatch_mcp_tool(name: str, args: Dict[str, Any], cfg: NGLAIConfig) -> str
 
     if name == "ask_local_ai":
         if not runtime.is_healthy():
-            runtime.start(cfg.active_model_id, wait_seconds=90)
+            runtime.start(ready_model, wait_seconds=90)
         prompt = str(args.get("prompt") or "")
         max_tokens = int(args.get("max_tokens") or 1024)
         with httpx.Client(timeout=300.0) as client:
             resp = client.post(
                 f"{runtime.base_url}/v1/chat/completions",
                 json={
-                    "model": cfg.active_model_id,
+                    "model": ready_model,
                     "messages": [{"role": "user", "content": prompt}],
                     "max_tokens": max_tokens,
                     "temperature": 0.2,
@@ -156,7 +168,7 @@ def _dispatch_mcp_tool(name: str, args: Dict[str, Any], cfg: NGLAIConfig) -> str
 
     if name == "run_local_coding_agent":
         if not runtime.is_healthy():
-            runtime.start(cfg.active_model_id, wait_seconds=90)
+            runtime.start(ready_model, wait_seconds=90)
         ws = Path(args["workspace"]).resolve() if args.get("workspace") else Path.cwd().resolve()
         agent = CompoundCodingAgent(config=cfg, workspace_root=ws)
         return agent.run_turn(str(args.get("task") or ""))
